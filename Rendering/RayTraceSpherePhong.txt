@@ -1,128 +1,128 @@
-Carter S. Jan 2020
-Basic Raytrace of a sphere with diffuse.
-Altered version based on pix 2013 (httpswww.shadertoy.comviewXdj3zz)
+//Carter Slocum Jan 2020
+//Basic Raytrace of a Sphere using Phong model.
+//Altered version based on pix 2013 (https://www.shadertoy.com/view/Xdj3zz)
 
 
 struct Ray {
-	vec3 origin;  Origin
-	vec3 direction;  Direction
+	vec3 origin; // Origin
+	vec3 direction; // Direction
 };
 
 struct Sphere {
-	vec3 center;   Center
-	float radius;  Radius
+	vec3 center;  // Center
+	float radius; // Radius
 };
 
-Simplest light source
+//Simplest light source
 struct PointLight {
     vec3 position;
     vec4 color;
 };
 
     
-Get the Specular color (shiny light)
+//Get the Specular color (shiny light)
 vec4 calculateSpecular(in vec3 rayd, in vec3 normal, in vec3 toLight, in PointLight light) {
-    specular exponent
+    //specular exponent
     float shinnyness = 5.0;
-    get the reflected light vector
-    vec3 reflected = 2.0dot(toLight, normal)normal - toLight;
-    calculate specular color
-    return light.color  max(0.0,pow(dot(rayd,reflected),shinnyness));
+    //get the reflected light vector
+    vec3 reflected = 2.0*dot(toLight, normal)*normal - toLight;
+    //calculate specular color
+    return light.color * max(0.0,pow(dot(rayd,reflected),shinnyness));
 }
     
-Get the Diffuse color (Basic light effect)
+//Get the Diffuse color (Basic light effect)
 vec4 calculateDiffuse(in vec3 normal, in vec3 toLight, in PointLight light) {
-    return light.color  max(0.0,dot(normal,toLight));
+    return light.color * max(0.0,dot(normal,toLight));
 }
     
-Get the direction to the light source (no shadows simplifies check)
+//Get the direction to the light source (no shadows simplifies check)
 vec3 checkLight(in vec3 intersect, in PointLight light) {
     return normalize(light.position - intersect);
 }
     
-Get the sphere surface normal from the intersection point
+//Get the sphere surface normal from the intersection point
 vec3 getSphereIntersectionNormal(in vec3 intersect, in Sphere sphere) {
 	return normalize(intersect - sphere.center);
 } 
 
-Get the 3d point that is depth along the ray
+//Get the 3d point that is depth along the ray
 vec3 calculateIntersectionPoint(in Ray ray, in float depth) {
-	return ray.origin + ray.directiondepth;
+	return ray.origin + ray.direction*depth;
 }
     
- From the Wikipedia page on Line-sphere intersection
+// From the Wikipedia page on Line-sphere intersection
 float intersectSphere(in Ray ray, in Sphere sphere) {
-	 Sphere center to ray origin
+	// Sphere center to ray origin
 	vec3 co = ray.origin - sphere.center;
 
-	 The discriminant is negative for a miss, or a postive value
-	 used to calcluate the distance from the ray origin to point of intersection
-    bear in mind that there may be more than one solution
-	float discriminant = dot(co, ray.direction)  dot(co, ray.direction)
-			- (dot(co, co) - sphere.radius  sphere.radius);
+	// The discriminant is negative for a miss, or a postive value
+	// used to calcluate the distance from the ray origin to point of intersection
+    //bear in mind that there may be more than one solution
+	float discriminant = dot(co, ray.direction) * dot(co, ray.direction)
+			- (dot(co, co) - sphere.radius * sphere.radius);
 
-	 If answer is not negative, get ray intersection depth
-	if (discriminant = 0.0)
+	// If answer is not negative, get ray intersection depth
+	if (discriminant >= 0.0)
 		return -dot(ray.direction, co) - sqrt(discriminant);
 	else
-		return -1.;  Any negative number to indicate no intersect
+		return -1.; // Any negative number to indicate no intersect
 }
 
 void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
 
-     output a 4d fragment color vector [R,G,B,A]
-     input is a 2d fragment Co-ordinate vector [X,Y]
-     can interpret input vector as a pixel (function is called 640x360 times by default per frame)
+    // output a 4d fragment color vector [R,G,B,A]
+    // input is a 2d fragment Co-ordinate vector [X,Y]
+    // can interpret input vector as a pixel (function is called 640x360 times by default per frame)
     
-	 Converting all coordinates (x,y) to be in the range [0,1]
-	float u = fragCoord.x  iResolution.x;  iResolution.x is width in pixels
-	float v = fragCoord.y  iResolution.y;  iResolution.y is height in pixels
+	// Converting all coordinates (x,y) to be in the range [0,1]
+	float u = fragCoord.x / iResolution.x; // iResolution.x is width in pixels
+	float v = fragCoord.y / iResolution.y; // iResolution.y is height in pixels
 
-	 Now convert from coordinate range [0,1] to [-1,1]
-	 This moves pixel (0,0) to the middle of the image
-	u = u  2.0 - 1.0;
-	v = v  2.0 - 1.0;
+	// Now convert from coordinate range [0,1] to [-1,1]
+	// This moves pixel (0,0) to the middle of the image
+	u = u * 2.0 - 1.0;
+	v = v * 2.0 - 1.0;
 
-    the following line is necessary since the image may not be a square
-    removing this line results in the x dimension being stretched
-    u = (iResolution.xiResolution.y);
+    //the following line is necessary since the image may not be a square
+    //removing this line results in the x dimension being stretched
+    u *= (iResolution.x/iResolution.y);
     
-	 The position of this pixel in 3D space 
-    (imagine a plane centered at the origin perpendicular to the camera, what would be the 3d coordinates of this pixel)
+	// The position of this pixel in 3D space 
+    //(imagine a plane centered at the origin perpendicular to the camera, what would be the 3d coordinates of this pixel?)
 	vec3 pixelPos = vec3(u, v, 0);
 
-     The camera position in this example is on a fixed loop.
-     Initialize at 0.0
+    // The camera position in this example is on a fixed loop.
+    // Initialize at 0.0
     vec3 cameraPos = vec3(0.0, 0.0, -4.0); 
     
-	 The ray direction is ray from the camera through the pixel
+	// The ray direction is ray from the camera through the pixel
 	vec3 rayDir = normalize(pixelPos - cameraPos);
     
-     The Sphere is at the origin
+    // The Sphere is at the origin
     Sphere sphere = Sphere(vec3(0.0, 0.0, 7.0), 1.0); 
 
-    Create Ray struct from origin through current pixel
+    //Create Ray struct from origin through current pixel
     Ray ray = Ray(cameraPos, rayDir);
     
-	 Check if the ray from the camera through the pixel intersects the sphere
+	// Check if the ray from the camera through the pixel intersects the sphere
 	float intersectionDepth = intersectSphere(ray, sphere);
 
-	 If the depth at which the ray intersects the sphere is positive (in front of camera)
-	if (intersectionDepth = 0.5)
-	{draw the sphere color (basic ambient + diffuse)
-        ambient color of the sphere is greenish
+	// If the depth at which the ray intersects the sphere is positive (in front of camera)
+	if (intersectionDepth >= 0.5)
+	{//draw the sphere color (basic ambient + diffuse)
+        //ambient color of the sphere is greenish
         vec4 ambientColor = vec4(0.0,0.2,0.0,0.1);
-        Point light is purple and a little to the left of the camera start
+        //Point light is purple and a little to the left of the camera start
         PointLight light = PointLight(vec3(-3.0,0.0,0.0), vec4(1.0,0.0,1.0,1.0));
-        Get the ray intersection Point
+        //Get the ray intersection Point
         vec3 intersect = calculateIntersectionPoint(ray, intersectionDepth);
-        Get the surface normal at that point
+        //Get the surface normal at that point
 		vec3 normal = getSphereIntersectionNormal(intersect,sphere);
-        Get the direction to the lightsource from the intersection point
+        //Get the direction to the lightsource from the intersection point
         vec3 toLight = checkLight(intersect, light);
-        Combine it all to get the correct color
+        //Combine it all to get the correct color
         fragColor = ambientColor + calculateDiffuse(normal,toLight,light) + calculateSpecular(-ray.direction, normal, toLight, light);
     } else
-         else draw background color (black)
+        // else draw background color (black)
 		fragColor = vec4(0, 0, 0, 1);
 }
