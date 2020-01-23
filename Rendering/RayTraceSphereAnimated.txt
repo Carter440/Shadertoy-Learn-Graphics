@@ -28,7 +28,7 @@ struct PointLight {
 
     
 //Move the Sphere over time
-void AnimateSphere(out Sphere sphere) {
+void AnimateSphere(inout Sphere sphere) {
     //Size of the animation loop
 	float loopRadius = 4.0;
     //initial sphere position
