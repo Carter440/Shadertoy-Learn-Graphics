@@ -1,0 +1,270 @@
+//Carter S. Jan 2020
+//Basic Raytrace of a Moving Sphere with Reflections and Refractions.
+//normally these checks would be done recursively but for educational purpses it is often
+//easier to see it done iteratively
+//The Reflections and Refractions are only calculated for one bounce
+//This is closer to a halfSphere "Lens" than a true glass sphere (need lots of bounces)
+#define PI 3.14159265359
+
+struct Ray {
+	vec3 origin; // Origin of ray (not to be confused with world origin)
+	vec3 direction; // Direction Normalized vector
+};
+
+struct Sphere {
+    int objID;
+	vec3 center;  // Center of the Sphere
+	float radius; // Radius of the Sphere
+};
+    
+struct Plane {
+    int objID;
+	vec3 normal; //Normal vector
+    vec3 point; //Some point such that for all points p in the plane dot((p-point),normal) == 0
+};
+
+//Simplest light source
+struct PointLight {
+    vec3 position; //3d point in space
+    vec4 color; //RGBA color
+};
+
+    
+//Move the Sphere over time
+void AnimateSphere(inout Sphere sphere) {
+    //Size of the animation loop
+	float loopRadius = 4.0;
+    //initial sphere position
+    float loopOffset = sphere.center.z;
+    //time it takes to complete a loop
+    float loopTime = 8.0;
+    
+    //Based on parametric equations of a circle
+    sphere.center.x = sin((mod(iTime, loopTime))/loopTime*2.0*PI)*loopRadius;
+    sphere.center.z = loopOffset + cos((mod(iTime,loopTime))/loopTime*2.0*PI)*loopRadius;
+    
+}
+    
+//Get the Specular color (shiny light)
+vec4 calculateSpecular(in vec3 rayd, in vec3 normal, in vec3 toLight, in PointLight light) {
+    //specular exponent
+    float shinnyness = 5.0;
+    //get the reflected light vector
+    vec3 reflected = 2.0*dot(toLight, normal)*normal - toLight;
+    //calculate specular color
+    return light.color * max(0.0,pow(dot(rayd,reflected),shinnyness));
+}
+    
+//Get the Diffuse color (Basic light effect)
+vec4 calculateDiffuse(in vec3 normal, in vec3 toLight, in PointLight light) {
+    return light.color * max(0.0,dot(normal,toLight));
+}
+    
+//Get the direction to the light source (no shadows simplifies check)
+vec3 checkLight(in vec3 intersect, in PointLight light) {
+    return normalize(light.position - intersect);
+}
+
+//Get the sphere surface normal from the intersection point
+vec3 getSphereIntersectionNormal(in vec3 intersect, in Sphere sphere) {
+	return normalize(intersect - sphere.center);
+} 
+
+//Get the 3d point that is depth along the ray
+vec3 calculateIntersectionPoint(in Ray ray, in float depth) {
+	return ray.origin + ray.direction*depth;
+}
+    
+// From the Wikipedia page on Line-Plane intersection
+float intersectPlane(in Ray ray, in Plane plane) {
+	float denominator = dot(plane.normal,ray.direction);
+    if(abs(denominator) >= 0.001) {//make sure Ray is not parallel to plane (or nearly parallel)
+        return dot((plane.point - ray.origin),plane.normal)/denominator;
+    }
+	return -1.0; // Any negative number to indicate no intersect (or intersection from behind)
+}
+
+// From the Wikipedia page on Line-sphere intersection
+float intersectSphere(in Ray ray, in Sphere sphere) {
+	// Sphere center to ray origin
+	vec3 co = ray.origin - sphere.center;
+
+	// The discriminant is negative for a miss, or a postive value
+	// used to calcluate the distance from the ray origin to point of intersection
+    //bear in mind that there may be more than one solution
+	float discriminant = dot(co, ray.direction) * dot(co, ray.direction)
+			- (dot(co, co) - sphere.radius * sphere.radius);
+
+	// If answer is not negative, get ray intersection depth
+	if (discriminant >= 0.0)
+		return -dot(ray.direction, co) - sqrt(discriminant);
+	else
+		return -1.; // Any negative number to indicate no intersect
+}
+
+float performPlaneCheck(in Ray ray, in Plane plane, in Sphere sphere, out vec4 color){
+//code for plane Check
+// Check if the ray from the camera through the pixel intersects the Plane
+	float intersectionDepth = intersectPlane(ray,plane);
+    if (intersectionDepth >= 0.001 && intersectionDepth <= 1000.0) {//Front and Back Culling
+    	//Point light is purple and a little to the left and aboveof the camera start
+    	PointLight light = PointLight(vec3(-5.0,5.0,0.0), vec4(1.0,1.0,1.0,1.0));
+    	//Get the ray intersection Point
+    	vec3 intersect = calculateIntersectionPoint(ray,intersectionDepth);
+    	//Initialize Plane color
+    	vec4 ambientPlaneColor = vec4(0.0,0.0,0.0,1.0);
+    	
+        //set Texture to appropriate material
+        if (plane.objID == 1) {
+        	ambientPlaneColor = texture(iChannel0,intersect.xz);
+        }else {
+        	ambientPlaneColor = texture(iChannel1,intersect.xy);
+        }
+        
+        
+    	//Get the direction to the lightsource from the intersection point
+    	vec3 toLight = checkLight(intersect, light);
+    	//contruct Ray for shadow check
+    	Ray shadowRay = Ray(intersect, toLight);
+    	//Do a shadow check
+    	float shadowIntersectionDepth = intersectSphere(shadowRay,sphere);
+    	if (shadowIntersectionDepth >= 0.05) { //Sphere is blocking the Light
+        	color = ambientPlaneColor;
+    	}else{ //Light is visable from this point
+        	color = ambientPlaneColor + 0.25*calculateDiffuse(plane.normal, toLight, light);
+    	}
+        return intersectionDepth;
+    }else{
+        // else draw background color (black)
+		color = vec4(0.0,0.0,0.0,1.0);
+        return -1.0;
+    }
+}
+
+void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
+
+    // output a 4d fragment color vector [R,G,B,A]
+    // input is a 2d fragment Co-ordinate vector [X,Y]
+    // can interpret input vector as a pixel (function is called 640x360 times by default per frame)
+    
+	// Converting all coordinates (x,y) to be in the range [0,1]
+	float u = fragCoord.x / iResolution.x; // iResolution.x is width in pixels
+	float v = fragCoord.y / iResolution.y; // iResolution.y is height in pixels
+
+	// Now convert from coordinate range [0,1] to [-1,1]
+	// This moves pixel (0,0) to the middle of the image
+	u = u * 2.0 - 1.0;
+	v = v * 2.0 - 1.0;
+
+    //the following line is necessary since the image may not be a square
+    //removing this line results in the x dimension being stretched
+    u *= (iResolution.x/iResolution.y);
+    
+	// The position of this pixel in 3D space 
+    //(imagine a plane centered at the origin perpendicular to the camera, what would be the 3d coordinates of this pixel?)
+	vec3 pixelPos = vec3(u, v, 0);
+
+    // The camera position in this example is on a fixed loop.
+    // Initialize at 0.0
+    vec3 cameraPos = vec3(0.0, 0.0, -4.0); 
+    
+	// The ray direction is ray from the camera through the pixel
+	vec3 rayDir = normalize(pixelPos - cameraPos);
+    
+    // The Sphere is at the origin
+    Sphere sphere = Sphere(0,vec3(0.0, 0.0, 7.0), 1.0);
+    
+    //Animate the Sphere
+    AnimateSphere(sphere);
+    
+    // The wooden plane is the xz plane at y = -2.0
+    Plane woodPlane = Plane(1,vec3(0.0,1.0,0.0),vec3(0.0,-2.0,0.0));
+    
+    // The tile plane is the xy plane at z = 12.0
+    Plane tilePlane = Plane(2,vec3(0.0,0.0,-1.0), vec3(0.0,0.0,15.0));
+
+    //Create Ray struct from origin through current pixel
+    Ray ray = Ray(cameraPos, rayDir);
+    
+	// Check if the ray from the camera through the pixel intersects the sphere
+	float intersectionDepth = intersectSphere(ray, sphere);
+
+	// If the depth at which the ray intersects the sphere is positive (in front of camera)
+	if (intersectionDepth >= 0.05)//Sphere Check
+	{//draw the sphere color (basic ambient + diffuse)
+        //ambient color of the sphere is greyish
+        vec4 ambientSphereColor = vec4(0.2,0.2,0.2,1.0);
+        
+        //Point light is white and a little to the left of the camera start
+        PointLight light = PointLight(vec3(-3.0,0.0,0.0), vec4(0.5,0.5,0.5,1.0));
+        
+        //Get the ray intersection Point
+        vec3 intersect = calculateIntersectionPoint(ray, intersectionDepth);
+        
+        //Get the surface normal at that point
+		vec3 normal = getSphereIntersectionNormal(intersect,sphere);
+        
+        //Get the direction to the lightsource from the intersection point
+        vec3 toLight = checkLight(intersect, light);
+        
+        //we are going to skip the checks for shadows for the sphere
+        //but in other scenes we will not have this luxury
+        
+        //Refract Ray see https://en.wikipedia.org/wiki/Refraction for math details
+        vec3 refracted = refract(ray.direction,normal, 0.7);//1.0/1.2 is index of refraction for glass
+        Ray refractedRay = Ray(intersect,refracted);
+        
+        vec4 woodColor = vec4(0.0,0.0,0.0,0.0);//Initialize colors
+        vec4 tileColor = vec4(0.0,0.0,0.0,0.0);
+        
+        //This is a lazy way of handling 2 planes in a scene
+        float intersectedWood = performPlaneCheck(refractedRay,woodPlane,sphere, woodColor);
+        float intersectedTile = performPlaneCheck(refractedRay,tilePlane,sphere, tileColor);
+        vec4 refColor = vec4(0.0,0.0,0.0,0.0);
+        if (intersectedWood < 0.0)
+        {
+        	refColor = tileColor;
+        }else if (intersectedTile <= intersectedWood){
+        	refColor = tileColor;
+        }else{
+            refColor = woodColor;
+        }
+        
+        //calculate reflected Ray (normalize here is because im paranoid)
+        vec3 reflected = normalize(ray.direction - 2.0*dot(ray.direction, normal)*normal);
+        Ray rayreflect = Ray(intersect,reflected);
+          
+        //initialize reflected color
+        vec4 reflectColor = vec4(1.0,1.0,1.0,1.0);
+        //Plane Check
+        float intersected = performPlaneCheck(rayreflect,woodPlane,sphere,reflectColor);
+        //For this Scene we can skip the tilePlane check on reflections since
+        //we cannot reflect from the sphere to the back wall.
+        if (intersected > 0.0){
+        	//Combine it all to get the correct color (with reflected and refracted Color (mostly refracted))
+        	fragColor = 0.25*ambientSphereColor + 0.25*calculateDiffuse(normal,toLight,light) + 0.15*reflectColor + 0.35*refColor;
+        }else{
+        	//Combine it all to get the correct color (with refracted)
+        	fragColor = 0.33*ambientSphereColor + 0.17*calculateDiffuse(normal,toLight,light) + 0.5*refColor;
+        }
+        
+    } else {//Plane Checks (No Sphere Hit)
+        vec4 woodColor = vec4(0.0,0.0,0.0,0.0);//Initialize colors
+        vec4 tileColor = vec4(0.0,0.0,0.0,0.0);
+        
+        //This is a lazy way of handling 2 planes in a scene
+        float intersectedWood = performPlaneCheck(ray,woodPlane,sphere, woodColor);
+        float intersectedTile = performPlaneCheck(ray,tilePlane,sphere, tileColor);
+        
+        if (intersectedWood < 0.0)
+        {
+        	fragColor = tileColor;
+        }else if (intersectedTile <= intersectedWood){
+        	fragColor = tileColor;
+        }else{
+            fragColor = woodColor;
+        }
+        //Ideally a well coded ray tracer would handle these checks generically for all obj's in a scene
+        //This is a toy example
+    }
+}
