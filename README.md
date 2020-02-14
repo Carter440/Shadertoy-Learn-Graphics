@@ -6,3 +6,5 @@ Ray Trace Playlist at https://www.shadertoy.com/playlist/mlXBW8
 Ray March Playlist at https://www.shadertoy.com/playlist/cllBWS
 
 Procedural Generation Playlist at https://www.shadertoy.com/playlist/cljBRR
+
+Animation Playlist at https://www.shadertoy.com/playlist/dl2fz3
